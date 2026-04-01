@@ -45,6 +45,7 @@ public class OcrExtractionServiceImpl implements OcrExtractionService {
 	@Override
 	public OcrExtractResponse extractText(MultipartFile file) throws IOException, InterruptedException {
 		validateFile(file);
+		validateApiKey();
 
 		HttpRequest request = buildRequest(file);
 		HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
@@ -98,6 +99,13 @@ public class OcrExtractionServiceImpl implements OcrExtractionService {
 		if (!supported) {
 			throw new ResponseStatusException(BAD_REQUEST,
 					"Only PDF and common image formats are supported.");
+		}
+	}
+
+	private void validateApiKey() {
+		if (ocrSpaceProperties.key() == null || ocrSpaceProperties.key().isBlank()) {
+			throw new ResponseStatusException(BAD_REQUEST,
+					"OCR_SPACE_API_KEY is not configured. Set it as an environment variable before testing.");
 		}
 	}
 
