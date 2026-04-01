@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.idbiintech.OICR.config.OcrSpaceProperties;
 import com.idbiintech.OICR.dto.OcrExtractResponse;
@@ -55,7 +56,7 @@ public class OcrExtractionServiceImpl implements OcrExtractionService {
 
 		OcrSpaceApiResponse apiResponse = objectMapper.readValue(response.body(), OcrSpaceApiResponse.class);
 		if (apiResponse.isErroredOnProcessing()) {
-			String details = firstNonBlank(apiResponse.errorMessage(), apiResponse.errorDetails(),
+			String details = firstNonBlank(readJsonValue(apiResponse.errorMessage()), readJsonValue(apiResponse.errorDetails()),
 					"OCR processing failed.");
 			throw new ResponseStatusException(BAD_GATEWAY, details);
 		}
@@ -172,5 +173,22 @@ public class OcrExtractionServiceImpl implements OcrExtractionService {
 				.filter(value -> !value.isEmpty())
 				.findFirst()
 				.orElse("");
+	}
+
+	private String readJsonValue(JsonNode node) {
+		if (node == null || node.isNull()) {
+			return "";
+		}
+		if (node.isArray()) {
+			return Arrays.stream(objectMapper.convertValue(node, String[].class))
+					.filter(Objects::nonNull)
+					.map(String::trim)
+					.filter(value -> !value.isEmpty())
+					.collect(Collectors.joining(", "));
+		}
+		if (node.isTextual()) {
+			return node.asText();
+		}
+		return node.toString();
 	}
 }
