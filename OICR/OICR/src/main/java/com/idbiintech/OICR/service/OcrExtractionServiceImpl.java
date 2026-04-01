@@ -155,16 +155,58 @@ public class OcrExtractionServiceImpl implements OcrExtractionService {
 
 	private Map<String, String> extractKeyValuePairs(String rawText) {
 		Map<String, String> extractedFields = new LinkedHashMap<>();
-		Arrays.stream(rawText.split("\\R"))
+		String[] lines = Arrays.stream(rawText.split("\\R"))
 				.map(String::trim)
 				.filter(line -> !line.isBlank())
-				.forEach(line -> {
-					String[] tokens = line.split("\\s*[:=-]\\s*", 2);
-					if (tokens.length == 2 && !tokens[0].isBlank() && !tokens[1].isBlank()) {
-						extractedFields.put(normalizeKey(tokens[0]), tokens[1].trim());
+				.toArray(String[]::new);
+
+		int labelBlockEnd = findTrailingLabelBlockEnd(lines);
+		if (labelBlockEnd > 0 && labelBlockEnd < lines.length) {
+			String[] labels = Arrays.copyOfRange(lines, 0, labelBlockEnd);
+			String[] values = Arrays.copyOfRange(lines, labelBlockEnd, lines.length);
+			if (labels.length == values.length && Arrays.stream(labels).allMatch(this::isStandaloneLabel)) {
+				for (int index = 0; index < labels.length; index++) {
+					String label = labels[index].replaceAll("\\s*[:=-]\\s*$", "").trim();
+					String value = values[index].trim();
+					if (!label.isBlank() && !value.isBlank()) {
+						extractedFields.put(normalizeKey(label), value);
 					}
-				});
+				}
+				return extractedFields;
+			}
+		}
+
+		for (int index = 0; index < lines.length; index++) {
+			String line = lines[index];
+			String[] tokens = line.split("\\s*[:=-]\\s*", 2);
+
+			if (tokens.length == 2 && !tokens[0].isBlank() && !tokens[1].isBlank()) {
+				extractedFields.put(normalizeKey(tokens[0]), tokens[1].trim());
+				continue;
+			}
+
+			if (isStandaloneLabel(line) && index + 1 < lines.length) {
+				String label = line.replaceAll("\\s*[:=-]\\s*$", "").trim();
+				String value = lines[index + 1];
+				if (!label.isBlank() && !value.isBlank() && !isStandaloneLabel(value)) {
+					extractedFields.put(normalizeKey(label), value);
+					index++;
+				}
+			}
+		}
 		return extractedFields;
+	}
+
+	private int findTrailingLabelBlockEnd(String[] lines) {
+		int index = 0;
+		while (index < lines.length && isStandaloneLabel(lines[index])) {
+			index++;
+		}
+		return index;
+	}
+
+	private boolean isStandaloneLabel(String line) {
+		return line.matches("^[A-Za-z][A-Za-z0-9\\s()/.&-]*\\s*[:=-]\\s*$");
 	}
 
 	private String normalizeKey(String key) {
